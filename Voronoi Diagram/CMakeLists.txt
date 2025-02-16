@@ -8,10 +8,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Add the executable
-add_executable(VoronoiDiagram main.cpp)
+add_executable(testAVL src/AVLTree/testAVL.cpp)
 
 # Include directories
-include_directories(include)
+include_directories(src/AVLTree)
 
 # Link libraries (if any)
 # target_link_libraries(VoronoiDiagram <library_name>)

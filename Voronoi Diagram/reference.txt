@@ -4,3 +4,5 @@ https://github.com/JCash/voronoi/tree/dev
 https://en.wikipedia.org/wiki/Fortune%27s_algorithm
 https://www.cs.umd.edu/class/spring2020/cmsc754/Lects/lect11-vor.pdf
 https://old.cescg.org/CESCG99/RCuk/
+https://www.cs.hmc.edu/~mbrubeck/voronoi.html
+https://github.com/Yatoom/foronoi/blob/master/foronoi/graph/coordinate.py
