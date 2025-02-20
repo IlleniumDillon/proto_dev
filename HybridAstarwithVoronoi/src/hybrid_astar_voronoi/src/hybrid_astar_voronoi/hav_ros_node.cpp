@@ -1,10 +1,11 @@
 #include "hav_ros_node.hpp"
 #include "tf2/utils.h"
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 HAVROSNode::HAVROSNode()
     : Node("hav_ros_node")
 {
-    declare_parameter("mapfile");
+    declare_parameter("mapfile", ament_index_cpp::get_package_share_directory("hybrid_astar_voronoi") + "/config/map.png");
     std::string mapfile = this->get_parameter("mapfile").as_string();
     cv::Mat map = cv::imread(mapfile, cv::IMREAD_GRAYSCALE);
     if (map.empty())
@@ -18,6 +19,7 @@ HAVROSNode::HAVROSNode()
     cv::Point3d state_max(map.cols * resolution.x, map.rows * resolution.y, M_PI);
     graph = std::make_shared<hav::GridGraph>(origin, resolution, state_min, state_max, map);
     planner.bindGraph(graph.get());
+    planner.setExecuteSpace(0.3, M_PI / 4, 2, 2, 0.5);
 
     this->map.header.frame_id = "map";
     this->map.info.resolution = resolution.x;
@@ -43,6 +45,21 @@ HAVROSNode::HAVROSNode()
     map_pub = this->create_publisher<nav_msgs::msg::OccupancyGrid>("map", 10);
     goal_sub = this->create_subscription<geometry_msgs::msg::PoseStamped>("goal", 10, std::bind(&HAVROSNode::goalCallback, this, std::placeholders::_1));
     timer = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&HAVROSNode::timerCallback, this));
+
+
+    // cv::Mat dmshow(map.rows, map.cols, CV_8UC1);
+    // for (int i = 0; i < map.rows; i++)
+    // {
+    //     for (int j = 0; j < map.cols; j++)
+    //     {
+    //         dmshow.at<uchar>(i, j) = (*graph).gnodes[j][i]->distance_to_obstacle;
+    //     }
+    // }
+    // double min = 0, max = 0;
+    // cv::minMaxIdx(dmshow, &min, &max);
+    // dmshow = (dmshow - min) / (max - min) * 255;
+    // cv::imshow("distance to obstacle", dmshow);
+    // cv::waitKey(0);
 }
 
 void HAVROSNode::goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
@@ -61,6 +78,7 @@ void HAVROSNode::goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr m
         goal.y = msg->pose.position.y;
         goal.theta = tf2::getYaw(msg->pose.orientation);
         auto result = planner.search(cv::Point3d(start.x, start.y, start.theta), cv::Point3d(goal.x, goal.y, goal.theta));
+        RCLCPP_INFO(this->get_logger(), "Plan time: %f ms", result.plan_time_ms);
         if (result.success)
         {
             path.header.frame_id = "map";

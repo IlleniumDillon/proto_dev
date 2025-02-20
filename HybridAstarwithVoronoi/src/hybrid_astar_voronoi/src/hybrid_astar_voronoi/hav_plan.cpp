@@ -69,7 +69,10 @@ void hav::HAVPlanner::reset()
 double hav::HAVPlanner::heuristic(PlanNode *node, PlanNode *goal)
 {
     cv::Point2d diff = node->gnode->position - goal->gnode->position;
-    return std::sqrt(diff.x*diff.x + diff.y*diff.y);
+    double dish = std::sqrt(diff.x*diff.x + diff.y*diff.y);
+    double diso = node->gnode->distance_to_obstacle < goal->gnode->distance_to_obstacle ? 
+        node->gnode->distance_to_obstacle : goal->gnode->distance_to_obstacle;
+    return dish - diso;
 }
 
 void hav::HAVPlanner::getNeighbors(PlanNode *node, std::vector<PlanNode *> &neighbors, std::vector<PlanNodeCost> &costs, std::vector<cv::Point3f> &neighbor_state, std::vector<cv::Point2d> &vws)
@@ -102,7 +105,7 @@ void hav::HAVPlanner::getNeighbors(PlanNode *node, std::vector<PlanNode *> &neig
         }
         auto neighbor = (*graph)(state.x, state.y, state.z);
 
-        if(neighbor != nullptr && !neighbor->gnode->is_obstacle)
+        if(neighbor != nullptr && !neighbor->gnode->is_obstacle && neighbor->flag != IN_CLOSESET)
         {
             // std::cout << "neighbor: " << state.x << "," << state.y << "," << state.z << std::endl;
             neighbors.emplace_back(neighbor);

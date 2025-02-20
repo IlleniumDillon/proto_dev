@@ -34,6 +34,11 @@ BUILD_EXEC(
   DEPENDENCIES rclcpp ament_index_cpp geometry_msgs nav_msgs tf2 trajectory_msgs Eigen3 OpenCV
 )
 
+install(
+  DIRECTORY launch config
+  DESTINATION share/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

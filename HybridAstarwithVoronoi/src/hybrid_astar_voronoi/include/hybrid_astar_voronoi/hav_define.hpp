@@ -92,16 +92,37 @@ public:
     }
 };
 
+enum GridNodeFlag
+{
+    DM_UNKNOWN,
+    DM_UNCONFIRMED,
+    DM_CONFIRMED,
+    DM_RISE,
+    DM_FALL
+};
+
 class GridNode
 {
 public:
     cv::Point2d position;
     cv::Point2i index;
     std::vector<PlanNode*> pnodes;
+
+    GridNodeFlag flag;
+    std::multimap<double, GridNode*>::iterator it;
     double distance_to_obstacle = 0.0;
+    cv::Point2i nearest_obstacle;
     bool is_obstacle = false;
 public:
-    GridNode(){}
+    GridNode()
+    {
+        position = cv::Point2d(0, 0);
+        index = cv::Point2i(0, 0);
+        flag = DM_UNKNOWN;
+        distance_to_obstacle = 0.0;
+        nearest_obstacle = cv::Point2i(0, 0);
+        is_obstacle = false;
+    }
     ~GridNode()
     {
         for(auto& pnode: pnodes)
@@ -114,6 +135,11 @@ public:
 class GridGraph
 {
 public:
+    GridGraph(){}
+    GridGraph(cv::Point3d origin, cv::Point3d resolution, cv::Point3d state_min, cv::Point3d state_max, const cv::Mat& map);
+    ~GridGraph();
+// for hybrid A* search
+public:
     cv::Point3d origin;
     cv::Point3d resolution;
     cv::Point3i size;
@@ -122,12 +148,6 @@ public:
 
     std::vector<std::vector<GridNode*>> gnodes;
 public:
-    GridGraph(){}
-    GridGraph(cv::Point3d origin, cv::Point3d resolution, cv::Point3d state_min, cv::Point3d state_max, const cv::Mat& map);
-    ~GridGraph();
-    void updateObstacle(const std::vector<cv::Point2i>& map);
-    void updateDistanceToObstacle();
-
     PlanNode* operator()(int x, int y, int z);
     PlanNode* operator()(const cv::Point3i& index);
     PlanNode* operator()(double x, double y, double z);
@@ -137,6 +157,18 @@ public:
     GridNode* operator()(const cv::Point2i& index);
     GridNode* operator()(double x, double y);
     GridNode* operator()(const cv::Point2d& state);
+// for Dynamic Distance Map
+public:
+    std::multimap<double, GridNode*> open_set;
+    std::vector<GridNode*> close_set;
+
+    std::vector<cv::Point2i> insert_obstacles;
+    std::vector<cv::Point2i> remove_obstacles;
+public:
+    void initDistanceToObstacle();
+    void updateObstacle(const std::vector<cv::Point2i>& map);
+    void updateDistanceToObstacle();
+    void reset();
 };
 
 } // namespace hav

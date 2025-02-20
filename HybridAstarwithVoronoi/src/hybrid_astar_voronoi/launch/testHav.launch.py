@@ -27,3 +27,14 @@ def generate_launch_description():
         package='hybrid_astar_voronoi',
         executable='hybrid_astar_voronoi'
     )
+    
+    launchtestHav = TimerAction(
+        period=10.0,
+        actions=[testHav]
+    )
+    
+    return LaunchDescription([
+        rviz2,
+        launchtestHav
+    ])
+    
