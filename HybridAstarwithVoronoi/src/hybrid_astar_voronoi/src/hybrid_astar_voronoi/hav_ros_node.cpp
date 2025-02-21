@@ -45,6 +45,8 @@ HAVROSNode::HAVROSNode()
     map_pub = this->create_publisher<nav_msgs::msg::OccupancyGrid>("map", 10);
     goal_sub = this->create_subscription<geometry_msgs::msg::PoseStamped>("goal", 10, std::bind(&HAVROSNode::goalCallback, this, std::placeholders::_1));
     timer = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&HAVROSNode::timerCallback, this));
+    dm_pub = this->create_publisher<nav_msgs::msg::OccupancyGrid>("distance_to_obstacle", 10);
+    exchange_sub = this->create_subscription<geometry_msgs::msg::PointStamped>("exchange", 10, std::bind(&HAVROSNode::exchangeCallback, this, std::placeholders::_1));
 
 
     // cv::Mat dmshow(map.rows, map.cols, CV_8UC1);
@@ -58,8 +60,41 @@ HAVROSNode::HAVROSNode()
     // double min = 0, max = 0;
     // cv::minMaxIdx(dmshow, &min, &max);
     // dmshow = (dmshow - min) / (max - min) * 255;
+    // cv::resize(dmshow, dmshow, cv::Size(800, 800), 0, 0, cv::INTER_NEAREST);
     // cv::imshow("distance to obstacle", dmshow);
     // cv::waitKey(0);
+    cv::Mat dmshow(graph->size.y, graph->size.x, CV_32FC1);
+    for (int i = 0; i < graph->size.y; i++)
+    {
+        for (int j = 0; j < graph->size.x; j++)
+        {
+            dmshow.at<float>(i, j) = graph->operator()(j, i)->distance_to_obstacle;
+        }
+    } 
+    double min = 0, max = 0;
+    cv::minMaxIdx(dmshow, &min, &max);
+    dmshow = 100 - ((dmshow - min) / (max - min) * 100);
+    nav_msgs::msg::OccupancyGrid dm;
+    dm.header.frame_id = "map";
+    dm.info.resolution = graph->resolution.x;
+    dm.info.width = graph->size.x;
+    dm.info.height = graph->size.y;
+    dm.info.origin.position.x = graph->state_min.x;
+    dm.info.origin.position.y = graph->state_min.y;
+    dm.info.origin.position.z = 0;
+    dm.info.origin.orientation.x = 0;
+    dm.info.origin.orientation.y = 0;
+    dm.info.origin.orientation.z = 0;
+    dm.info.origin.orientation.w = 1;
+    dm.data.resize(graph->size.x * graph->size.y);
+    for (int i = 0; i < graph->size.y; i++)
+    {
+        for (int j = 0; j < graph->size.x; j++)
+        {
+            dm.data[i * graph->size.x + j] = dmshow.at<float>(i, j);
+        }
+    }
+    dm_pub->publish(dm);
 }
 
 void HAVROSNode::goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
@@ -104,4 +139,44 @@ void HAVROSNode::goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr m
 void HAVROSNode::timerCallback()
 {
     map_pub->publish(map);
+}
+
+void HAVROSNode::exchangeCallback(const geometry_msgs::msg::PointStamped::SharedPtr msg)
+{
+    cv::Point2d point(msg->point.x, msg->point.y);
+    cv::Point2i index = (graph->operator()(point)->index);
+    graph->updateObstacle({index});
+    graph->updateDistanceToObstacle();
+    cv::Mat dmshow(graph->size.y, graph->size.x, CV_32FC1);
+    for (int i = 0; i < graph->size.y; i++)
+    {
+        for (int j = 0; j < graph->size.x; j++)
+        {
+            dmshow.at<float>(i, j) = graph->operator()(j, i)->distance_to_obstacle;
+        }
+    } 
+    double min = 0, max = 0;
+    cv::minMaxIdx(dmshow, &min, &max);
+    dmshow = 100 - ((dmshow - min) / (max - min) * 100);
+    nav_msgs::msg::OccupancyGrid dm;
+    dm.header.frame_id = "map";
+    dm.info.resolution = graph->resolution.x;
+    dm.info.width = graph->size.x;
+    dm.info.height = graph->size.y;
+    dm.info.origin.position.x = graph->state_min.x;
+    dm.info.origin.position.y = graph->state_min.y;
+    dm.info.origin.position.z = 0;
+    dm.info.origin.orientation.x = 0;
+    dm.info.origin.orientation.y = 0;
+    dm.info.origin.orientation.z = 0;
+    dm.info.origin.orientation.w = 1;
+    dm.data.resize(graph->size.x * graph->size.y);
+    for (int i = 0; i < graph->size.y; i++)
+    {
+        for (int j = 0; j < graph->size.x; j++)
+        {
+            dm.data[i * graph->size.x + j] = dmshow.at<float>(i, j);
+        }
+    }
+    dm_pub->publish(dm);
 }

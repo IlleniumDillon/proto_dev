@@ -86,11 +86,6 @@ hav::GridGraph::~GridGraph()
     }
 }
 
-void hav::GridGraph::updateObstacle(const std::vector<cv::Point2i> &map)
-{
-
-}
-
 void hav::GridGraph::initDistanceToObstacle()
 {
     while(!open_set.empty())
@@ -140,9 +135,191 @@ void hav::GridGraph::initDistanceToObstacle()
     reset();
 }
 
+void hav::GridGraph::insertObstacle(const cv::Point2i &index)
+{
+    if(index.x < 0 || index.x >= size.x || index.y < 0 || index.y >= size.y)
+    {
+        return;
+    }
+    if(this->gnodes[index.x][index.y]->is_obstacle)
+    {
+        return;
+    }
+    this->gnodes[index.x][index.y]->is_obstacle = true;
+    this->gnodes[index.x][index.y]->distance_to_obstacle = 0;
+    this->gnodes[index.x][index.y]->nearest_obstacle = cv::Point2i(index.x, index.y);
+    this->gnodes[index.x][index.y]->flag = DM_UNCONFIRMED;
+    this->gnodes[index.x][index.y]->it = open_set.insert(std::make_pair(0, this->gnodes[index.x][index.y]));
+}
+
+void hav::GridGraph::removeObstacle(const cv::Point2i &index)
+{
+    if(index.x < 0 || index.x >= size.x || index.y < 0 || index.y >= size.y)
+    {
+        return;
+    }
+    if(!this->gnodes[index.x][index.y]->is_obstacle)
+    {
+        return;
+    }
+    this->gnodes[index.x][index.y]->is_obstacle = false;
+    // this->gnodes[index.x][index.y]->distance_to_obstacle = std::numeric_limits<double>::max();
+    this->gnodes[index.x][index.y]->nearest_obstacle = cv::Point2i(-1, -1);
+    this->gnodes[index.x][index.y]->flag = DM_UNCONFIRMED;
+    this->gnodes[index.x][index.y]->need_rise = true;
+    this->gnodes[index.x][index.y]->it = open_set.insert(std::make_pair(std::numeric_limits<double>::max(), this->gnodes[index.x][index.y]));
+}
+
+void hav::GridGraph::updateObstacle(const std::vector<cv::Point2i> &map)
+{
+    for(auto & p : map)
+    {
+        if(p.x < 0 || p.x >= size.x || p.y < 0 || p.y >= size.y)
+        {
+            continue;
+        }
+        if(this->gnodes[p.x][p.y]->is_obstacle)
+        {
+            removeObstacle(p);
+        }
+        else
+        {
+            insertObstacle(p);
+        }
+    }
+}
+
 void hav::GridGraph::updateDistanceToObstacle()
 {
-    
+    while(!open_set.empty())
+    {
+        GridNode* current = open_set.begin()->second;
+        if(current->need_rise)
+        {
+            open_set.erase(open_set.begin());
+            current->flag = DM_UNKNOWN;
+            for(int dx = -1; dx <= 1; dx++)
+            {
+                for(int dy = -1; dy <= 1; dy++)
+                {
+                    if(dx == 0 && dy == 0)
+                    {
+                        continue;
+                    }
+                    int nx = current->index.x + dx;
+                    int ny = current->index.y + dy;
+                    if(nx < 0 || nx >= size.x || ny < 0 || ny >= size.y)
+                    {
+                        continue;
+                    }
+                    GridNode* neighbor = this->gnodes[nx][ny];
+                    if(neighbor->need_rise)
+                    {
+                        continue;
+                    }
+                    // cv::Point2i diff = current->nearest_obstacle - neighbor->index;
+                    // double distance = std::sqrt(diff.x*diff.x + diff.y*diff.y);
+                    if(current->distance_to_obstacle >= neighbor->distance_to_obstacle)
+                    {
+                        if(neighbor->flag == DM_UNKNOWN || neighbor->flag == DM_CONFIRMED)
+                        {
+                            neighbor->flag = DM_UNCONFIRMED;
+                            neighbor->it = open_set.insert(std::make_pair(neighbor->distance_to_obstacle, neighbor));
+                        }
+                        else if(neighbor->flag == DM_UNCONFIRMED)
+                        {
+                            open_set.erase(neighbor->it);
+                            neighbor->it = open_set.insert(std::make_pair(neighbor->distance_to_obstacle, neighbor));
+                        }
+                    }
+                    else
+                    {
+                        if(neighbor->flag == DM_UNKNOWN || neighbor->flag == DM_CONFIRMED)
+                        {
+                            neighbor->flag = DM_UNCONFIRMED;
+                            neighbor->nearest_obstacle = current->nearest_obstacle;
+                            neighbor->it = open_set.insert(std::make_pair(std::numeric_limits<double>::max(), neighbor));
+                        }
+                        else if(neighbor->flag == DM_UNCONFIRMED)
+                        {
+                            open_set.erase(neighbor->it);
+                            neighbor->nearest_obstacle = current->nearest_obstacle;
+                            neighbor->it = open_set.insert(std::make_pair(std::numeric_limits<double>::max(), neighbor));
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            open_set.erase(open_set.begin());
+            close_set.push_back(current);
+            current->flag = DM_CONFIRMED;
+
+            for(int dx = -1; dx <= 1; dx++)
+            {
+                for(int dy = -1; dy <= 1; dy++)
+                {
+                    if(dx == 0 && dy == 0)
+                    {
+                        continue;
+                    }
+                    int nx = current->index.x + dx;
+                    int ny = current->index.y + dy;
+                    if(nx < 0 || nx >= size.x || ny < 0 || ny >= size.y)
+                    {
+                        continue;
+                    }
+                    GridNode* neighbor = this->gnodes[nx][ny];
+                    if(neighbor->is_obstacle || neighbor->flag == DM_CONFIRMED)
+                    {
+                        continue;
+                    }
+                    cv::Point2i diff = current->nearest_obstacle - neighbor->index;
+                    double distance = std::sqrt(diff.x*diff.x + diff.y*diff.y);
+                    if(neighbor->nearest_obstacle == cv::Point2i(-1, -1))
+                    {
+                        // if(neighbor->flag == DM_UNCONFIRMED)
+                        // {
+                        //     open_set.erase(neighbor->it);
+                        //     neighbor->distance_to_obstacle = distance;
+                        //     neighbor->nearest_obstacle = current->nearest_obstacle;
+                        //     neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                        // }
+                        // else if(neighbor->flag == DM_UNKNOWN)
+                        // {
+                        //     neighbor->distance_to_obstacle = distance;
+                        //     neighbor->nearest_obstacle = current->nearest_obstacle;
+                        //     neighbor->flag = DM_UNCONFIRMED;
+                        //     neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                        // }
+                    }
+                    else if(neighbor->distance_to_obstacle <= distance)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        if(neighbor->flag == DM_UNKNOWN)
+                        {
+                            neighbor->distance_to_obstacle = distance;
+                            neighbor->nearest_obstacle = current->nearest_obstacle;
+                            neighbor->flag = DM_UNCONFIRMED;
+                            neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                        }
+                        else if(neighbor->flag == DM_UNCONFIRMED && neighbor->distance_to_obstacle > distance)
+                        {
+                            open_set.erase(neighbor->it);
+                            neighbor->distance_to_obstacle = distance;
+                            neighbor->nearest_obstacle = current->nearest_obstacle;
+                            neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    reset();
 }
 
 void hav::GridGraph::reset()

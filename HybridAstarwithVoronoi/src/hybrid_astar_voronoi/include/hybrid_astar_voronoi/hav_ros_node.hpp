@@ -8,6 +8,7 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "geometry_msgs/msg/pose2_d.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include <geometry_msgs/msg/point_stamped.hpp>
 
 class HAVROSNode : public rclcpp::Node
 {
@@ -22,11 +23,14 @@ public:
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub;
     rclcpp::TimerBase::SharedPtr timer;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr dm_pub;
+    rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr exchange_sub;
 public:
     HAVROSNode();
     ~HAVROSNode() = default;
 
     void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+    void exchangeCallback(const geometry_msgs::msg::PointStamped::SharedPtr msg);
     void timerCallback();
 };
 

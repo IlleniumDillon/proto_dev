@@ -113,15 +113,17 @@ public:
     double distance_to_obstacle = 0.0;
     cv::Point2i nearest_obstacle;
     bool is_obstacle = false;
+    bool need_rise = false;
 public:
     GridNode()
     {
         position = cv::Point2d(0, 0);
         index = cv::Point2i(0, 0);
         flag = DM_UNKNOWN;
-        distance_to_obstacle = 0.0;
-        nearest_obstacle = cv::Point2i(0, 0);
+        distance_to_obstacle = std::numeric_limits<double>::max();
+        nearest_obstacle = cv::Point2i(-1, -1);
         is_obstacle = false;
+        need_rise = false;
     }
     ~GridNode()
     {
@@ -166,6 +168,8 @@ public:
     std::vector<cv::Point2i> remove_obstacles;
 public:
     void initDistanceToObstacle();
+    void insertObstacle(const cv::Point2i& index);
+    void removeObstacle(const cv::Point2i& index);
     void updateObstacle(const std::vector<cv::Point2i>& map);
     void updateDistanceToObstacle();
     void reset();
