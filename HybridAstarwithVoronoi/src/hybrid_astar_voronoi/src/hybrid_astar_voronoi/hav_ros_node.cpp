@@ -6,6 +6,7 @@ HAVROSNode::HAVROSNode()
     : Node("hav_ros_node")
 {
     declare_parameter("mapfile", ament_index_cpp::get_package_share_directory("hybrid_astar_voronoi") + "/config/map.png");
+    declare_parameter("mapnewfile", ament_index_cpp::get_package_share_directory("hybrid_astar_voronoi") + "/config/map_new.png");
     std::string mapfile = this->get_parameter("mapfile").as_string();
     cv::Mat map = cv::imread(mapfile, cv::IMREAD_GRAYSCALE);
     if (map.empty())
@@ -13,6 +14,25 @@ HAVROSNode::HAVROSNode()
         RCLCPP_ERROR(this->get_logger(), "Failed to load map file: %s", mapfile.c_str());
         return;
     }
+    std::string mapnewfile = this->get_parameter("mapnewfile").as_string();
+    cv::Mat map_new = cv::imread(mapnewfile, cv::IMREAD_GRAYSCALE);
+    if (map_new.empty())
+    {
+        RCLCPP_ERROR(this->get_logger(), "Failed to load map new file: %s", mapnewfile.c_str());
+        return;
+    }
+
+    for(int i = 0; i < map.rows; i++)
+    {
+        for(int j = 0; j < map.cols; j++)
+        {
+            if(map_new.at<uchar>(i, j) == 0)
+            {
+                exchange_obstacles.emplace_back(cv::Point2i(j, i));
+            }
+        }
+    }
+
     cv::Point3d origin(0, 0, 0);
     cv::Point3d resolution(0.05, 0.05, 0.05);
     cv::Point3d state_min(0, 0, -M_PI);
@@ -145,8 +165,12 @@ void HAVROSNode::exchangeCallback(const geometry_msgs::msg::PointStamped::Shared
 {
     cv::Point2d point(msg->point.x, msg->point.y);
     cv::Point2i index = (graph->operator()(point)->index);
-    graph->updateObstacle({index});
+    // graph->updateObstacle({index});
+    auto start = std::chrono::high_resolution_clock::now();
+    graph->updateObstacle(exchange_obstacles);
     graph->updateDistanceToObstacle();
+    auto end = std::chrono::high_resolution_clock::now();
+    RCLCPP_INFO(this->get_logger(), "update distance to obstacle time: %f ms", std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / 1.0e6);
     cv::Mat dmshow(graph->size.y, graph->size.x, CV_32FC1);
     for (int i = 0; i < graph->size.y; i++)
     {

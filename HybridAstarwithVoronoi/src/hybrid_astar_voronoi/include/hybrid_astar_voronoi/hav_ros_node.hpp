@@ -25,6 +25,8 @@ public:
     rclcpp::TimerBase::SharedPtr timer;
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr dm_pub;
     rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr exchange_sub;
+
+    std::vector<cv::Point2i> exchange_obstacles;
 public:
     HAVROSNode();
     ~HAVROSNode() = default;

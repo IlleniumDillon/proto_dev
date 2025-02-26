@@ -71,8 +71,10 @@ hav::GridGraph::GridGraph(cv::Point3d origin, cv::Point3d resolution, cv::Point3
             }
         }
     }
-
+    auto start = std::chrono::high_resolution_clock::now();
     initDistanceToObstacle();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "init distance to obstacle time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 }
 
 hav::GridGraph::~GridGraph()
@@ -173,7 +175,7 @@ void hav::GridGraph::removeObstacle(const cv::Point2i &index)
     this->gnodes[index.x][index.y]->is_obstacle = false;
     this->gnodes[index.x][index.y]->distance_to_obstacle = std::numeric_limits<double>::max();
     this->gnodes[index.x][index.y]->nearest_obstacle = cv::Point2i(-1, -1);
-    this->gnodes[index.x][index.y]->flag = DM_UNCONFIRMED;
+    this->gnodes[index.x][index.y]->flag = DM_RISE;
     this->gnodes[index.x][index.y]->need_rise = true;
     this->gnodes[index.x][index.y]->it = open_set.insert(std::make_pair(0, this->gnodes[index.x][index.y]));
 }
@@ -202,9 +204,12 @@ void hav::GridGraph::updateDistanceToObstacle()
     while(!open_set.empty())
     {
         GridNode* current = open_set.begin()->second;
+        open_set.erase(open_set.begin());
         if(current->flag == DM_CONFIRMED) continue;
         if(current->need_rise)
         {
+            current->need_rise = false;
+            current->flag = DM_FALL;
             for(int dx = -1; dx <= 1; dx++)
             {
                 for(int dy = -1; dy <= 1; dy++)
@@ -214,16 +219,78 @@ void hav::GridGraph::updateDistanceToObstacle()
                     int ny = current->index.y + dy;
                     if(nx < 0 || nx >= size.x || ny < 0 || ny >= size.y) continue;
                     GridNode* neighbor = this->gnodes[nx][ny];
-                    if(neighbor->nearest_obstacle != cv::Point2i(-1, -1) && !neighbor->need_rise)
+                    if(neighbor->need_rise)
                     {
-                        
+                        continue;
                     } 
+                    if(neighbor->flag == DM_FALL)
+                    {
+                        continue;
+                    }
+                    // GridNode* nearest = this->gnodes[neighbor->nearest_obstacle.x][neighbor->nearest_obstacle.y];
+                    if(neighbor->nearest_obstacle == cv::Point2i(-1, -1) || this->gnodes[neighbor->nearest_obstacle.x][neighbor->nearest_obstacle.y]->is_obstacle == false)
+                    {
+                        double distance = neighbor->distance_to_obstacle;
+                        neighbor->distance_to_obstacle = std::numeric_limits<double>::max();
+                        neighbor->nearest_obstacle = cv::Point2i(-1, -1);
+                        neighbor->flag = DM_UNCONFIRMED;
+                        neighbor->need_rise = true;
+                        neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                    }
+                    else
+                    {
+                        if(neighbor->flag == DM_CONFIRMED || neighbor->flag == DM_UNKNOWN)
+                        {
+                            neighbor->flag = DM_UNCONFIRMED;
+                            neighbor->it = open_set.insert(std::make_pair(neighbor->distance_to_obstacle, neighbor));
+                        }
+                    }
                 }
             }
         }
-        else
+        else if(current->nearest_obstacle != cv::Point2i(-1, -1) &&
+            this->gnodes[current->nearest_obstacle.x][current->nearest_obstacle.y]->is_obstacle)
         {
-            
+            current->flag = DM_CONFIRMED;
+            close_set.push_back(current);
+            for(int dx = -1; dx <= 1; dx++)
+            {
+                for(int dy = -1; dy <= 1; dy++)
+                {
+                    if(dx == 0 && dy == 0) continue;
+                    int nx = current->index.x + dx;
+                    int ny = current->index.y + dy;
+                    if(nx < 0 || nx >= size.x || ny < 0 || ny >= size.y) continue;
+                    GridNode* neighbor = this->gnodes[nx][ny];
+                    if(neighbor->is_obstacle) continue;
+                    if(neighbor->need_rise) continue;
+                    if(neighbor->flag == DM_CONFIRMED) continue;
+                    cv::Point2i diff = current->nearest_obstacle - neighbor->index;
+                    double distance = std::sqrt(diff.x*diff.x + diff.y*diff.y);
+                    if(neighbor->flag == DM_FALL)
+                    {
+                        neighbor->flag = DM_UNCONFIRMED;
+                        neighbor->distance_to_obstacle = distance;
+                        neighbor->nearest_obstacle = current->nearest_obstacle;
+                        neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                    }
+                    else if(distance < neighbor->distance_to_obstacle)
+                    {
+                        neighbor->distance_to_obstacle = distance;
+                        neighbor->nearest_obstacle = current->nearest_obstacle;
+                        if(neighbor->flag == DM_UNKNOWN)
+                        {
+                            neighbor->flag = DM_UNCONFIRMED;
+                            neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                        }
+                        else if(neighbor->flag == DM_UNCONFIRMED)
+                        {
+                            open_set.erase(neighbor->it);
+                            neighbor->it = open_set.insert(std::make_pair(distance, neighbor));
+                        }
+                    }
+                }
+            }
         }
     }
     reset();
